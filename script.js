@@ -17,6 +17,8 @@ const phraseContainer = document.getElementById('phraseContainer');
 const phraseText = document.getElementById('phraseText');
 const starsContainer = document.getElementById('starsContainer');
 const endMessage = document.getElementById('endMessage');
+const progressFill = document.getElementById('progressFill');
+const progressText = document.getElementById('progressText');
 
 let phrases = []; // Array de objetos: {text: string, rating: number, index: number}
 let userVotes = []; // Array de votos do usuário atual: [0-5 ou null]
@@ -154,6 +156,9 @@ async function loadData() {
             return;
         }
         
+        // Update progress
+        updateProgress();
+        
         // Show next unvoted phrase
         showNextPhrase();
     } catch (err) {
@@ -214,8 +219,8 @@ function showNextPhrase() {
     const selected = unvotedPhrases[randomIndex];
     currentPhraseIndex = selected.index;
     
-    // Display phrase
-    phraseText.textContent = selected.phrase.text;
+    // Display phrase with quotes and italic style
+    phraseText.innerHTML = `"${selected.phrase.text}"`;
     
     // Render stars
     renderStars();
@@ -287,6 +292,9 @@ async function vote(phraseIndex, rating) {
     try {
         await submitVote(phraseIndex, rating);
         
+        // Update progress
+        updateProgress();
+        
         // Move to next phrase after a short delay
         setTimeout(() => {
             showNextPhrase();
@@ -320,10 +328,27 @@ async function submitVote(phraseIndex, rating) {
     });
 }
 
+// Update progress bar
+function updateProgress() {
+    if (phrases.length === 0) {
+        progressFill.style.width = '0%';
+        progressText.textContent = '0 / 0';
+        return;
+    }
+    
+    const votedCount = userVotes.filter(v => v !== null && v !== undefined).length;
+    const totalCount = phrases.length;
+    const percentage = (votedCount / totalCount) * 100;
+    
+    progressFill.style.width = percentage + '%';
+    progressText.textContent = `${votedCount} / ${totalCount}`;
+}
+
 // Show end message
 function showEndMessage() {
     phraseContainer.style.display = 'none';
     endMessage.style.display = 'block';
+    updateProgress(); // Update progress to show 100%
 }
 
 
