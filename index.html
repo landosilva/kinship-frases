@@ -8,20 +8,6 @@
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>📝 Frases</h1>
-            <p class="subtitle">Gerencie suas frases de forma simples</p>
-        </header>
-
-        <div class="actions">
-            <button id="refreshBtn" class="btn btn-primary">
-                <span>🔄</span> Atualizar
-            </button>
-            <button id="addBtn" class="btn btn-success">
-                <span>➕</span> Adicionar Frase
-            </button>
-        </div>
-
         <div class="loading" id="loading" style="display: none;">
             <div class="spinner"></div>
             <p>Carregando...</p>
@@ -29,34 +15,15 @@
 
         <div class="error" id="error" style="display: none;"></div>
 
-        <div class="table-container">
-            <table id="dataTable" style="display: none;">
-                <thead>
-                    <tr id="headerRow"></tr>
-                </thead>
-                <tbody id="dataBody"></tbody>
-            </table>
+        <!-- Phrase Display -->
+        <div id="phraseContainer" class="phrase-container" style="display: none;">
+            <div class="phrase-text" id="phraseText"></div>
+            <div class="stars-container" id="starsContainer"></div>
         </div>
 
-        <div id="emptyState" class="empty-state" style="display: block;">
-            <p>Nenhum dado encontrado. Clique em "Atualizar" para carregar os dados.</p>
-        </div>
-    </div>
-
-    <!-- Modal para adicionar/editar frases -->
-    <div id="modal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modalTitle">Adicionar Nova Frase</h2>
-                <button class="close-btn" id="closeModal">&times;</button>
-            </div>
-            <form id="formModal">
-                <div id="formFields"></div>
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="cancelBtn">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Salvar</button>
-                </div>
-            </form>
+        <!-- End Message -->
+        <div id="endMessage" class="end-message" style="display: none;">
+            <p>não tem mais frases... por enquanto</p>
         </div>
     </div>
 

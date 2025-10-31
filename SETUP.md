@@ -34,11 +34,11 @@ function doPost(e) {
     
     // Handle different actions
     if (data.action === 'append') {
-      // Add new phrase to Frases sheet
-      const sheet = ss.getSheetByName('Frases');
+      // Add new phrase to Phrases sheet
+      const sheet = ss.getSheetByName('Phrases');
       if (!sheet) {
         return ContentService
-          .createTextOutput(JSON.stringify({success: false, error: 'Aba "Frases" não encontrada'}))
+          .createTextOutput(JSON.stringify({success: false, error: 'Aba "Phrases" não encontrada'}))
           .setMimeType(ContentService.MimeType.JSON)
           .setHeaders({'Access-Control-Allow-Origin': '*'});
       }
@@ -52,27 +52,28 @@ function doPost(e) {
         .setHeaders({'Access-Control-Allow-Origin': '*'});
         
     } else if (data.action === 'vote') {
-      // Save vote to Votos sheet and update rating in Frases sheet
+      // Save vote to Votes sheet and update rating in Phrases sheet
+      // Rating is now 0-5 (stars) instead of -1, 0, 1
       
-      // Get or create Votos sheet
-      let votosSheet = ss.getSheetByName('Votos');
-      if (!votosSheet) {
-        votosSheet = ss.insertSheet('Votos');
-        votosSheet.appendRow(['ID', 'Votos']);
+      // Get or create Votes sheet
+      let votesSheet = ss.getSheetByName('Votes');
+      if (!votesSheet) {
+        votesSheet = ss.insertSheet('Votes');
+        votesSheet.appendRow(['Id', 'Votes']);
       }
       
       // Check if user already exists
       const userId = data.userId;
-      const voteValue = data.vote;
+      const rating = data.rating || 0; // 0-5 stars
       const phraseIndex = data.phraseIndex;
       const votesString = data.votes || '';
       
       // Find existing row for this user
-      const votosData = votosSheet.getDataRange().getValues();
+      const votesData = votesSheet.getDataRange().getValues();
       let userRowIndex = -1;
       
-      for (let i = 1; i < votosData.length; i++) {
-        if (votosData[i][0] === userId) {
+      for (let i = 1; i < votesData.length; i++) {
+        if (votesData[i][0] === userId) {
           userRowIndex = i + 1; // +1 because sheets are 1-indexed
           break;
         }
@@ -81,34 +82,43 @@ function doPost(e) {
       // Update or create user vote record
       if (userRowIndex > 0) {
         // Update existing
-        votosSheet.getRange(userRowIndex, 2).setValue(votesString);
+        votesSheet.getRange(userRowIndex, 2).setValue(votesString);
       } else {
         // Create new
-        votosSheet.appendRow([userId, votesString]);
+        votesSheet.appendRow([userId, votesString]);
       }
       
-      // Update rating in Frases sheet
-      const frasesSheet = ss.getSheetByName('Frases');
-      if (frasesSheet) {
+      // Update rating in Phrases sheet
+      const phrasesSheet = ss.getSheetByName('Phrases');
+      if (phrasesSheet) {
         // Get all votes from all users
-        const allVotos = votosSheet.getDataRange().getValues();
-        let totalVotes = 0;
+        const allVotes = votesSheet.getDataRange().getValues();
+        let totalRating = 0;
+        let voteCount = 0;
         
-        // Sum all votes for this phrase index from all users
-        for (let i = 1; i < allVotos.length; i++) {
-          const userVotesStr = allVotos[i][1];
+        // Calculate average rating for this phrase from all users (0-5 stars)
+        for (let i = 1; i < allVotes.length; i++) {
+          const userVotesStr = allVotes[i][1];
           if (userVotesStr && userVotesStr.toString().trim() !== '') {
             const votes = userVotesStr.toString().split(',').map(v => v.trim());
             if (votes.length > phraseIndex && votes[phraseIndex] !== '') {
-              totalVotes += parseInt(votes[phraseIndex]) || 0;
+              const userRating = parseInt(votes[phraseIndex]);
+              if (!isNaN(userRating) && userRating >= 0 && userRating <= 5) {
+                totalRating += userRating;
+                voteCount++;
+              }
             }
           }
         }
         
-        // Update rating in Frases sheet (phraseIndex + 2 because header is row 1, and sheets are 1-indexed)
+        // Calculate average rating (you can also store sum if you prefer)
+        const averageRating = voteCount > 0 ? Math.round((totalRating / voteCount) * 10) / 10 : 0;
+        
+        // Update rating in Phrases sheet (phraseIndex + 2 because header is row 1, and sheets are 1-indexed)
         const ratingRow = phraseIndex + 2; // +1 for header, +1 for 0-index to 1-index
-        if (ratingRow <= frasesSheet.getLastRow()) {
-          frasesSheet.getRange(ratingRow, 2).setValue(totalVotes);
+        if (ratingRow <= phrasesSheet.getLastRow()) {
+          // Store average rating (or you can store totalRating if you prefer sum)
+          phrasesSheet.getRange(ratingRow, 2).setValue(averageRating);
         }
       }
       
