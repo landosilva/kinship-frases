@@ -6,9 +6,11 @@ const SHEET_NAME = 'Frases'; // Nome da aba
 const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyvTOavkRUQaoVaRd9WKm01PPmeOhwQL9qKP4mdc0Vc-uCjyxgLNzC9bpW9yhWT7R1g/exec';
 
 // CSV export URL for reading - vamos usar a aba "Frases"
-// Formato alternativo usando o GID da aba "Frases" (98642087)
-// Ou usando o formato gviz com nome da aba
-const CSV_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=98642087`;
+// GID 0 é para a primeira aba, que parece ser "Frases" baseado na URL
+// Tentaremos múltiplos formatos de URL caso um não funcione
+const CSV_URL_GID_0 = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=0`;
+const CSV_URL_GID_98642087 = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=98642087`;
+const CSV_URL_NO_GID = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv`;
 
 // DOM Elements
 const refreshBtn = document.getElementById('refreshBtn');
@@ -65,38 +67,84 @@ async function loadData() {
     showLoading(true);
     hideError();
     
-    try {
-        console.log('Loading data from:', CSV_URL);
-        const response = await fetch(CSV_URL);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    // Try multiple URLs in order of preference
+    const urls = [
+        CSV_URL_GID_0,
+        CSV_URL_GID_98642087,
+        CSV_URL_NO_GID
+    ];
+    
+    let csvText = null;
+    let lastError = null;
+    
+    for (let i = 0; i < urls.length; i++) {
+        try {
+            console.log(`Tentativa ${i + 1}: Carregando de`, urls[i]);
+            const response = await fetch(urls[i]);
+            
+            if (!response.ok) {
+                console.warn(`URL ${i + 1} falhou: HTTP ${response.status}`);
+                continue;
+            }
+            
+            csvText = await response.text();
+            console.log('CSV recebido, tamanho:', csvText.length);
+            console.log('Primeiras 200 caracteres:', csvText.substring(0, 200));
+            
+            if (csvText && csvText.trim() !== '') {
+                break; // Success, exit loop
+            }
+        } catch (err) {
+            console.warn(`Erro ao tentar URL ${i + 1}:`, err);
+            lastError = err;
+            continue;
         }
+    }
+    
+    if (!csvText || csvText.trim() === '') {
+        showEmptyState(true);
+        showTable(false);
+        showError('Não foi possível acessar a planilha. Verifique se ela está publicada como "Qualquer pessoa com o link pode visualizar".');
+        console.error('Todas as URLs falharam. Último erro:', lastError);
+        showLoading(false);
+        return;
+    }
+    
+    try {
+        const rows = parseCSV(csvText);
+        console.log('Linhas parseadas:', rows.length);
         
-        const csvText = await response.text();
-        console.log('CSV received, length:', csvText.length);
-        
-        if (!csvText || csvText.trim() === '') {
+        if (rows.length === 0) {
             showEmptyState(true);
             showTable(false);
-            showError('A planilha está vazia ou não pode ser acessada.');
+            showError('A planilha não contém dados.');
+            showLoading(false);
             return;
         }
         
-        const rows = parseCSV(csvText);
-        console.log('Parsed rows:', rows.length);
+        // Primeira linha pode ser cabeçalho - pular se for "Frases" ou "Rating"
+        let startIndex = 0;
+        if (rows.length > 0 && rows[0].length > 0) {
+            const firstCell = rows[0][0].toLowerCase().trim();
+            if (firstCell === 'frases' || firstCell === 'rating') {
+                startIndex = 1; // Pular cabeçalho
+            }
+        }
         
         // Extrair apenas a coluna A (primeira coluna de cada linha)
         phrases = rows
+            .slice(startIndex) // Pula cabeçalho se houver
             .map(row => row[0]) // Pega apenas a primeira coluna
             .filter(phrase => phrase && phrase.trim() !== ''); // Remove linhas vazias
         
         console.log('Frases encontradas:', phrases.length);
-        console.log('Frases:', phrases);
+        console.log('Primeiras 3 frases:', phrases.slice(0, 3));
         
         if (phrases.length === 0) {
             showEmptyState(true);
             showTable(false);
+            showError('Nenhuma frase encontrada na coluna A.');
+            showLoading(false);
             return;
         }
         
@@ -104,8 +152,8 @@ async function loadData() {
         showEmptyState(false);
         showTable(true);
     } catch (err) {
-        console.error('Error loading data:', err);
-        showError('Erro ao carregar dados: ' + err.message + '. Verifique se a planilha está pública.');
+        console.error('Erro ao processar CSV:', err);
+        showError('Erro ao processar os dados: ' + err.message);
         showEmptyState(true);
         showTable(false);
     } finally {
