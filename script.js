@@ -28,7 +28,28 @@ const cancelBtn = document.getElementById('cancelBtn');
 const modalTitle = document.getElementById('modalTitle');
 const formFields = document.getElementById('formFields');
 
-let phrases = []; // Array para armazenar as frases da coluna A
+let phrases = []; // Array de objetos: {text: string, rating: number, index: number}
+let userVotes = []; // Array de votos do usuário atual: [-1, 0, 1, ...]
+let userId = null; // ID único do usuário
+
+// Initialize user ID and votes from localStorage
+function initUserData() {
+    userId = localStorage.getItem('userId');
+    if (!userId) {
+        userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('userId', userId);
+    }
+    
+    const savedVotes = localStorage.getItem('userVotes');
+    if (savedVotes) {
+        userVotes = JSON.parse(savedVotes);
+    } else {
+        userVotes = [];
+    }
+    
+    console.log('User ID:', userId);
+    console.log('User votes:', userVotes);
+}
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
@@ -57,6 +78,9 @@ document.addEventListener('DOMContentLoaded', () => {
             closeModalHandler();
         }
     });
+    
+    // Initialize user data
+    initUserData();
     
     // Load data on page load
     loadData();
@@ -131,11 +155,20 @@ async function loadData() {
             }
         }
         
-        // Extrair apenas a coluna A (primeira coluna de cada linha)
+        // Extrair frases da coluna A e ratings da coluna B
         phrases = rows
             .slice(startIndex) // Pula cabeçalho se houver
-            .map(row => row[0]) // Pega apenas a primeira coluna
-            .filter(phrase => phrase && phrase.trim() !== ''); // Remove linhas vazias
+            .map((row, idx) => ({
+                text: row[0] || '',
+                rating: parseInt(row[1]) || 0,
+                index: idx
+            }))
+            .filter(phrase => phrase.text && phrase.text.trim() !== ''); // Remove linhas vazias
+        
+        // Expandir userVotes se necessário (se novas frases foram adicionadas)
+        while (userVotes.length < phrases.length) {
+            userVotes.push(null); // null significa que ainda não votou
+        }
         
         console.log('Frases encontradas:', phrases.length);
         console.log('Primeiras 3 frases:', phrases.slice(0, 3));
@@ -199,18 +232,163 @@ function renderPhrases() {
     headerRow.innerHTML = '';
     dataBody.innerHTML = '';
     
-    // Render header
-    const th = document.createElement('th');
-    th.textContent = 'Frase';
-    headerRow.appendChild(th);
+    // Render headers
+    const th1 = document.createElement('th');
+    th1.textContent = 'Frase';
+    headerRow.appendChild(th1);
+    
+    const th2 = document.createElement('th');
+    th2.textContent = 'Avaliação';
+    th2.style.width = '120px';
+    headerRow.appendChild(th2);
+    
+    const th3 = document.createElement('th');
+    th3.textContent = 'Votar';
+    th3.style.width = '180px';
+    headerRow.appendChild(th3);
+    
+    // Shuffle phrases for random order
+    const shuffledPhrases = [...phrases].sort(() => Math.random() - 0.5);
     
     // Render phrases
-    phrases.forEach((phrase, index) => {
+    shuffledPhrases.forEach((phraseObj, displayIndex) => {
         const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.textContent = phrase;
-        tr.appendChild(td);
+        tr.dataset.phraseIndex = phraseObj.index;
+        
+        // Phrase text
+        const tdPhrase = document.createElement('td');
+        tdPhrase.textContent = phraseObj.text;
+        tdPhrase.style.wordBreak = 'break-word';
+        tr.appendChild(tdPhrase);
+        
+        // Rating
+        const tdRating = document.createElement('td');
+        tdRating.style.textAlign = 'center';
+        tdRating.style.fontWeight = 'bold';
+        const ratingSpan = document.createElement('span');
+        ratingSpan.className = 'rating-badge';
+        ratingSpan.textContent = phraseObj.rating > 0 ? `+${phraseObj.rating}` : phraseObj.rating.toString();
+        ratingSpan.style.color = phraseObj.rating > 0 ? '#10b981' : phraseObj.rating < 0 ? '#ef4444' : '#6b7280';
+        tdRating.appendChild(ratingSpan);
+        tr.appendChild(tdRating);
+        
+        // Vote buttons
+        const tdVote = document.createElement('td');
+        tdVote.style.textAlign = 'center';
+        
+        const voteContainer = document.createElement('div');
+        voteContainer.className = 'vote-buttons';
+        voteContainer.style.display = 'flex';
+        voteContainer.style.gap = '0.5rem';
+        voteContainer.style.justifyContent = 'center';
+        
+        // Check if user already voted
+        const hasVoted = userVotes[phraseObj.index] !== null && userVotes[phraseObj.index] !== undefined;
+        
+        // Negative button
+        const btnNeg = document.createElement('button');
+        btnNeg.className = 'btn-vote btn-vote-negative';
+        btnNeg.textContent = '−';
+        btnNeg.title = 'Voto negativo';
+        btnNeg.disabled = hasVoted;
+        if (hasVoted && userVotes[phraseObj.index] === -1) {
+            btnNeg.classList.add('active');
+        }
+        btnNeg.addEventListener('click', () => vote(phraseObj.index, -1));
+        voteContainer.appendChild(btnNeg);
+        
+        // Neutral button
+        const btnNeu = document.createElement('button');
+        btnNeu.className = 'btn-vote btn-vote-neutral';
+        btnNeu.textContent = '○';
+        btnNeu.title = 'Voto neutro';
+        btnNeu.disabled = hasVoted;
+        if (hasVoted && userVotes[phraseObj.index] === 0) {
+            btnNeu.classList.add('active');
+        }
+        btnNeu.addEventListener('click', () => vote(phraseObj.index, 0));
+        voteContainer.appendChild(btnNeu);
+        
+        // Positive button
+        const btnPos = document.createElement('button');
+        btnPos.className = 'btn-vote btn-vote-positive';
+        btnPos.textContent = '+';
+        btnPos.title = 'Voto positivo';
+        btnPos.disabled = hasVoted;
+        if (hasVoted && userVotes[phraseObj.index] === 1) {
+            btnPos.classList.add('active');
+        }
+        btnPos.addEventListener('click', () => vote(phraseObj.index, 1));
+        voteContainer.appendChild(btnPos);
+        
+        tdVote.appendChild(voteContainer);
+        tr.appendChild(tdVote);
+        
         dataBody.appendChild(tr);
+    });
+}
+
+// Vote function
+async function vote(phraseIndex, voteValue) {
+    // Check if already voted
+    if (userVotes[phraseIndex] !== null && userVotes[phraseIndex] !== undefined) {
+        showError('Você já votou nesta frase!');
+        return;
+    }
+    
+    // Update local cache
+    userVotes[phraseIndex] = voteValue;
+    localStorage.setItem('userVotes', JSON.stringify(userVotes));
+    
+    // Send vote to server
+    try {
+        await submitVote(phraseIndex, voteValue);
+        
+        // Update UI immediately
+        const row = dataBody.querySelector(`tr[data-phrase-index="${phraseIndex}"]`);
+        if (row) {
+            const buttons = row.querySelectorAll('.btn-vote');
+            buttons.forEach(btn => {
+                btn.disabled = true;
+                btn.classList.remove('active');
+            });
+            
+            // Mark the voted button as active
+            if (voteValue === -1) buttons[0].classList.add('active');
+            else if (voteValue === 0) buttons[1].classList.add('active');
+            else if (voteValue === 1) buttons[2].classList.add('active');
+        }
+        
+        // Reload data to update ratings
+        setTimeout(() => {
+            loadData();
+        }, 1000);
+        
+    } catch (err) {
+        console.error('Error submitting vote:', err);
+        // Revert local change
+        userVotes[phraseIndex] = null;
+        localStorage.setItem('userVotes', JSON.stringify(userVotes));
+        showError('Erro ao salvar voto: ' + err.message);
+    }
+}
+
+// Submit vote to server
+async function submitVote(phraseIndex, voteValue) {
+    return new Promise((resolve, reject) => {
+        // Create vote data - update userVotes array first
+        const updatedVotes = [...userVotes];
+        updatedVotes[phraseIndex] = voteValue;
+        
+        const voteData = {
+            action: 'vote',
+            userId: userId,
+            phraseIndex: phraseIndex,
+            vote: voteValue,
+            votes: updatedVotes.map(v => v === null || v === undefined ? '' : v).join(',')
+        };
+        
+        submitViaHiddenFormVote(voteData, resolve, reject);
     });
 }
 
@@ -293,7 +471,7 @@ async function handleSubmit(e) {
 function submitViaHiddenForm(rowData) {
     // Create a hidden iframe to submit to
     const iframe = document.createElement('iframe');
-    iframe.name = 'hiddenSubmitFrame';
+    iframe.name = 'hiddenSubmitFrame_' + Date.now();
     iframe.style.display = 'none';
     document.body.appendChild(iframe);
     
@@ -301,7 +479,7 @@ function submitViaHiddenForm(rowData) {
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = WEB_APP_URL;
-    form.target = 'hiddenSubmitFrame';
+    form.target = iframe.name;
     form.style.display = 'none';
     
     // Google Apps Script expects postData.contents as a JSON string
@@ -313,9 +491,6 @@ function submitViaHiddenForm(rowData) {
     const dataInput = document.createElement('input');
     dataInput.type = 'hidden';
     dataInput.name = 'postData';
-    // The Google Apps Script receives this as e.parameter.postData
-    // But it expects e.postData.contents, so we need to send it differently
-    // Actually, let's send it as form data and modify the script
     dataInput.value = payload;
     
     form.appendChild(dataInput);
@@ -333,6 +508,46 @@ function submitViaHiddenForm(rowData) {
             document.body.removeChild(iframe);
         }
     }, 3000);
+}
+
+// Submit vote via hidden iframe
+function submitViaHiddenFormVote(voteData, resolve, reject) {
+    // Create a hidden iframe to submit to
+    const iframe = document.createElement('iframe');
+    iframe.name = 'hiddenVoteFrame_' + Date.now();
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+    
+    // Create a form that targets the iframe
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = WEB_APP_URL;
+    form.target = iframe.name;
+    form.style.display = 'none';
+    
+    const payload = JSON.stringify(voteData);
+    
+    const dataInput = document.createElement('input');
+    dataInput.type = 'hidden';
+    dataInput.name = 'postData';
+    dataInput.value = payload;
+    
+    form.appendChild(dataInput);
+    document.body.appendChild(form);
+    
+    // Submit the form
+    form.submit();
+    
+    // Assume success after delay
+    setTimeout(() => {
+        if (document.body.contains(form)) {
+            document.body.removeChild(form);
+        }
+        if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+        }
+        resolve();
+    }, 2000);
 }
 
 // Close modal

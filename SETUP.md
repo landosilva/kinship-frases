@@ -31,17 +31,87 @@ function doPost(e) {
     const sheetId = '1ajnPZy6u6nw-g5GE5ZbortN53JZ9SBkl9RYB9TxMFqs';
     
     const ss = SpreadsheetApp.openById(sheetId);
-    // Use a aba "Frases" pelo nome
-    const sheet = ss.getSheetByName('Frases');
-    if (!sheet) {
+    
+    // Handle different actions
+    if (data.action === 'append') {
+      // Add new phrase to Frases sheet
+      const sheet = ss.getSheetByName('Frases');
+      if (!sheet) {
+        return ContentService
+          .createTextOutput(JSON.stringify({success: false, error: 'Aba "Frases" não encontrada'}))
+          .setMimeType(ContentService.MimeType.JSON)
+          .setHeaders({'Access-Control-Allow-Origin': '*'});
+      }
+      
+      // Append phrase with initial rating of 0
+      sheet.appendRow([data.data[0], 0]);
+      
       return ContentService
-        .createTextOutput(JSON.stringify({success: false, error: 'Aba "Frases" não encontrada'}))
+        .createTextOutput(JSON.stringify({success: true}))
         .setMimeType(ContentService.MimeType.JSON)
         .setHeaders({'Access-Control-Allow-Origin': '*'});
-    }
-    
-    if (data.action === 'append') {
-      sheet.appendRow(data.data);
+        
+    } else if (data.action === 'vote') {
+      // Save vote to Votos sheet and update rating in Frases sheet
+      
+      // Get or create Votos sheet
+      let votosSheet = ss.getSheetByName('Votos');
+      if (!votosSheet) {
+        votosSheet = ss.insertSheet('Votos');
+        votosSheet.appendRow(['ID', 'Votos']);
+      }
+      
+      // Check if user already exists
+      const userId = data.userId;
+      const voteValue = data.vote;
+      const phraseIndex = data.phraseIndex;
+      const votesString = data.votes || '';
+      
+      // Find existing row for this user
+      const votosData = votosSheet.getDataRange().getValues();
+      let userRowIndex = -1;
+      
+      for (let i = 1; i < votosData.length; i++) {
+        if (votosData[i][0] === userId) {
+          userRowIndex = i + 1; // +1 because sheets are 1-indexed
+          break;
+        }
+      }
+      
+      // Update or create user vote record
+      if (userRowIndex > 0) {
+        // Update existing
+        votosSheet.getRange(userRowIndex, 2).setValue(votesString);
+      } else {
+        // Create new
+        votosSheet.appendRow([userId, votesString]);
+      }
+      
+      // Update rating in Frases sheet
+      const frasesSheet = ss.getSheetByName('Frases');
+      if (frasesSheet) {
+        // Get all votes from all users
+        const allVotos = votosSheet.getDataRange().getValues();
+        let totalVotes = 0;
+        
+        // Sum all votes for this phrase index from all users
+        for (let i = 1; i < allVotos.length; i++) {
+          const userVotesStr = allVotos[i][1];
+          if (userVotesStr && userVotesStr.toString().trim() !== '') {
+            const votes = userVotesStr.toString().split(',').map(v => v.trim());
+            if (votes.length > phraseIndex && votes[phraseIndex] !== '') {
+              totalVotes += parseInt(votes[phraseIndex]) || 0;
+            }
+          }
+        }
+        
+        // Update rating in Frases sheet (phraseIndex + 2 because header is row 1, and sheets are 1-indexed)
+        const ratingRow = phraseIndex + 2; // +1 for header, +1 for 0-index to 1-index
+        if (ratingRow <= frasesSheet.getLastRow()) {
+          frasesSheet.getRange(ratingRow, 2).setValue(totalVotes);
+        }
+      }
+      
       return ContentService
         .createTextOutput(JSON.stringify({success: true}))
         .setMimeType(ContentService.MimeType.JSON)

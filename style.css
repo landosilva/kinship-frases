@@ -324,3 +324,86 @@ tbody tr:last-child td {
     }
 }
 
+/* Vote buttons */
+.btn-vote {
+    width: 40px;
+    height: 40px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 1.5rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    color: var(--text-primary);
+}
+
+.btn-vote:hover:not(:disabled) {
+    transform: scale(1.1);
+    box-shadow: var(--shadow);
+}
+
+.btn-vote:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-vote.active {
+    border-width: 3px;
+}
+
+.btn-vote-negative {
+    color: #ef4444;
+    border-color: #fecaca;
+}
+
+.btn-vote-negative:hover:not(:disabled) {
+    background: #fef2f2;
+    border-color: #ef4444;
+}
+
+.btn-vote-negative.active {
+    background: #fef2f2;
+    border-color: #ef4444;
+}
+
+.btn-vote-neutral {
+    color: #6b7280;
+    border-color: #d1d5db;
+}
+
+.btn-vote-neutral:hover:not(:disabled) {
+    background: #f9fafb;
+    border-color: #6b7280;
+}
+
+.btn-vote-neutral.active {
+    background: #f9fafb;
+    border-color: #6b7280;
+}
+
+.btn-vote-positive {
+    color: #10b981;
+    border-color: #a7f3d0;
+}
+
+.btn-vote-positive:hover:not(:disabled) {
+    background: #f0fdf4;
+    border-color: #10b981;
+}
+
+.btn-vote-positive.active {
+    background: #f0fdf4;
+    border-color: #10b981;
+}
+
+.rating-badge {
+    font-size: 1.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 6px;
+    display: inline-block;
+}
+
