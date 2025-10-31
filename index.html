@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frases - Kinship</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📝 Frases</h1>
+            <p class="subtitle">Gerencie suas frases de forma simples</p>
+        </header>
+
+        <div class="actions">
+            <button id="refreshBtn" class="btn btn-primary">
+                <span>🔄</span> Atualizar
+            </button>
+            <button id="addBtn" class="btn btn-success">
+                <span>➕</span> Adicionar Frase
+            </button>
+        </div>
+
+        <div class="loading" id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Carregando...</p>
+        </div>
+
+        <div class="error" id="error" style="display: none;"></div>
+
+        <div class="table-container">
+            <table id="dataTable">
+                <thead>
+                    <tr id="headerRow"></tr>
+                </thead>
+                <tbody id="dataBody"></tbody>
+            </table>
+        </div>
+
+        <div id="emptyState" class="empty-state">
+            <p>Nenhum dado encontrado. Clique em "Atualizar" para carregar os dados.</p>
+        </div>
+    </div>
+
+    <!-- Modal para adicionar/editar frases -->
+    <div id="modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Adicionar Nova Frase</h2>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+            <form id="formModal">
+                <div id="formFields"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelBtn">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
