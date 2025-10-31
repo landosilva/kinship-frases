@@ -27,22 +27,39 @@ const formFields = document.getElementById('formFields');
 let headers = [];
 let currentData = [];
 
-// Event Listeners
-refreshBtn.addEventListener('click', loadData);
-addBtn.addEventListener('click', () => openModal('add'));
-closeModal.addEventListener('click', closeModalHandler);
-cancelBtn.addEventListener('click', closeModalHandler);
-formModal.addEventListener('submit', handleSubmit);
-
-// Close modal when clicking outside
-modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-        closeModalHandler();
-    }
-});
-
-// Load data on page load
+// Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+    // Verify all elements exist
+    if (!refreshBtn || !addBtn || !modal || !formModal) {
+        console.error('Some DOM elements are missing');
+        if (error) {
+            error.textContent = 'Erro ao inicializar a página. Recarregue a página.';
+            error.style.display = 'block';
+        }
+        return;
+    }
+    
+    // Event Listeners
+    refreshBtn.addEventListener('click', loadData);
+    addBtn.addEventListener('click', () => {
+        if (headers.length === 0) {
+            showError('Por favor, carregue os dados primeiro clicando em "Atualizar"');
+            return;
+        }
+        openModal('add');
+    });
+    closeModal.addEventListener('click', closeModalHandler);
+    cancelBtn.addEventListener('click', closeModalHandler);
+    formModal.addEventListener('submit', handleSubmit);
+    
+    // Close modal when clicking outside
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModalHandler();
+        }
+    });
+    
+    // Load data on page load
     loadData();
 });
 
@@ -52,14 +69,25 @@ async function loadData() {
     hideError();
     
     try {
+        console.log('Loading data from:', CSV_URL);
         const response = await fetch(CSV_URL);
         
         if (!response.ok) {
-            throw new Error('Erro ao carregar dados da planilha');
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         const csvText = await response.text();
+        console.log('CSV received, length:', csvText.length);
+        
+        if (!csvText || csvText.trim() === '') {
+            showEmptyState(true);
+            showTable(false);
+            showError('A planilha está vazia ou não pode ser acessada.');
+            return;
+        }
+        
         const rows = parseCSV(csvText);
+        console.log('Parsed rows:', rows.length);
         
         if (rows.length === 0) {
             showEmptyState(true);
@@ -71,11 +99,15 @@ async function loadData() {
         headers = rows[0];
         currentData = rows.slice(1);
         
+        console.log('Headers:', headers);
+        console.log('Data rows:', currentData.length);
+        
         renderTable();
         showEmptyState(false);
         showTable(true);
     } catch (err) {
-        showError('Erro ao carregar dados: ' + err.message);
+        console.error('Error loading data:', err);
+        showError('Erro ao carregar dados: ' + err.message + '. Verifique se a planilha está pública.');
         showEmptyState(true);
         showTable(false);
     } finally {
@@ -195,13 +227,19 @@ async function handleSubmit(e) {
         return;
     }
     
-    const formData = new FormData(formModal);
     const rowData = [];
     
     headers.forEach((header, index) => {
         const field = document.getElementById(`field_${index}`);
-        rowData.push(field.value || '');
+        if (!field) {
+            console.error(`Field field_${index} not found`);
+            rowData.push('');
+        } else {
+            rowData.push(field.value || '');
+        }
     });
+    
+    console.log('Submitting row data:', rowData);
     
     showLoading(true);
     hideError();
@@ -219,22 +257,46 @@ async function handleSubmit(e) {
             })
         });
         
-        if (!response.ok) {
-            throw new Error('Erro ao salvar dados');
+        console.log('Response status:', response.status);
+        
+        // Google Apps Script web apps often redirect, so we need to handle that
+        // Also, the response might be HTML or JSON
+        const text = await response.text();
+        console.log('Response text:', text.substring(0, 200));
+        
+        let result;
+        
+        // Try to parse as JSON
+        try {
+            result = JSON.parse(text);
+        } catch (parseError) {
+            // If it's not JSON, check if it's a success response
+            // Google Apps Script often returns HTML redirect pages on success
+            if (response.ok || response.status === 200) {
+                // If status is OK, assume success
+                result = { success: true };
+                console.log('Assumed success from response status');
+            } else {
+                // Try to extract error from HTML if possible
+                const errorMatch = text.match(/error[:\s]+([^<]+)/i);
+                const errorMsg = errorMatch ? errorMatch[1] : 'Erro desconhecido do servidor';
+                throw new Error(errorMsg);
+            }
         }
         
-        const result = await response.json();
+        console.log('Result:', result);
         
         if (result.success) {
             closeModalHandler();
             // Reload data after a short delay
             setTimeout(() => {
                 loadData();
-            }, 500);
+            }, 1000);
         } else {
             throw new Error(result.error || 'Erro ao salvar dados');
         }
     } catch (err) {
+        console.error('Error submitting form:', err);
         showError('Erro ao salvar: ' + err.message);
     } finally {
         showLoading(false);
@@ -262,10 +324,14 @@ function hideError() {
 }
 
 function showTable(show) {
-    dataTable.style.display = show ? 'table' : 'none';
+    if (dataTable) {
+        dataTable.style.display = show ? 'table' : 'none';
+    }
 }
 
 function showEmptyState(show) {
-    emptyState.style.display = show ? 'block' : 'none';
+    if (emptyState) {
+        emptyState.style.display = show ? 'block' : 'none';
+    }
 }
 
