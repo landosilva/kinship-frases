@@ -11,36 +11,71 @@ Para habilitar a escrita na planilha do Google Sheets, você precisa criar um Go
 ```javascript
 function doPost(e) {
   try {
-    const data = JSON.parse(e.postData.contents);
+    let data;
+    
+    // Try to parse from postData.contents (JSON body)
+    if (e.postData && e.postData.contents) {
+      data = JSON.parse(e.postData.contents);
+    }
+    // Try to parse from parameter (form data)
+    else if (e.parameter && e.parameter.postData) {
+      data = JSON.parse(e.parameter.postData);
+    }
+    // Fallback: try to get from raw postData
+    else if (e.postData) {
+      data = JSON.parse(e.postData);
+    } else {
+      throw new Error('Nenhum dado recebido');
+    }
+    
     const sheetId = '1ajnPZy6u6nw-g5GE5ZbortN53JZ9SBkl9RYB9TxMFqs';
     
     const ss = SpreadsheetApp.openById(sheetId);
-    // Use a primeira aba da planilha
-    // Se sua planilha tiver múltiplas abas, altere o índice ou use getSheetByName('NomeDaAba')
-    const sheet = ss.getSheets()[0];
+    // Use a aba "Frases" pelo nome
+    const sheet = ss.getSheetByName('Frases');
+    if (!sheet) {
+      return ContentService
+        .createTextOutput(JSON.stringify({success: false, error: 'Aba "Frases" não encontrada'}))
+        .setMimeType(ContentService.MimeType.JSON)
+        .setHeaders({'Access-Control-Allow-Origin': '*'});
+    }
     
     if (data.action === 'append') {
       sheet.appendRow(data.data);
       return ContentService
         .createTextOutput(JSON.stringify({success: true}))
-        .setMimeType(ContentService.MimeType.JSON);
+        .setMimeType(ContentService.MimeType.JSON)
+        .setHeaders({'Access-Control-Allow-Origin': '*'});
     }
     
     return ContentService
       .createTextOutput(JSON.stringify({success: false, error: 'Ação não suportada'}))
-      .setMimeType(ContentService.MimeType.JSON);
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeaders({'Access-Control-Allow-Origin': '*'});
       
   } catch (error) {
     return ContentService
       .createTextOutput(JSON.stringify({success: false, error: error.toString()}))
-      .setMimeType(ContentService.MimeType.JSON);
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeaders({'Access-Control-Allow-Origin': '*'});
   }
 }
 
 function doGet(e) {
   return ContentService
     .createTextOutput(JSON.stringify({message: 'Google Apps Script está funcionando!'}))
-    .setMimeType(ContentService.MimeType.JSON);
+    .setMimeType(ContentService.MimeType.JSON)
+    .setHeaders({'Access-Control-Allow-Origin': '*'});
+}
+
+function doOptions() {
+  return ContentService
+    .createTextOutput('')
+    .setHeaders({
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
+    });
 }
 ```
 
