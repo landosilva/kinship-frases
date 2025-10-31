@@ -2,9 +2,8 @@
 const SPREADSHEET_ID = '1ajnPZy6u6nw-g5GE5ZbortN53JZ9SBkl9RYB9TxMFqs';
 const GID = '98642087';
 
-// IMPORTANT: Replace this with your Google Apps Script Web App URL after deployment
-// See SETUP.md for instructions
-const WEB_APP_URL = 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE';
+// Google Apps Script Web App URL
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyvTOavkRUQaoVaRd9WKm01PPmeOhwQL9qKP4mdc0Vc-uCjyxgLNzC9bpW9yhWT7R1g/exec';
 
 // CSV export URL for reading
 const CSV_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${GID}`;
@@ -191,7 +190,7 @@ function openModal(mode = 'add') {
 async function handleSubmit(e) {
     e.preventDefault();
     
-    if (WEB_APP_URL === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
+    if (!WEB_APP_URL || WEB_APP_URL.includes('YOUR_GOOGLE_APPS_SCRIPT_URL')) {
         showError('Por favor, configure a URL do Google Apps Script primeiro. Veja SETUP.md para instruções.');
         return;
     }
