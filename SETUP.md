@@ -39,8 +39,7 @@ function doPost(e) {
       if (!sheet) {
         return ContentService
           .createTextOutput(JSON.stringify({success: false, error: 'Aba "Phrases" não encontrada'}))
-          .setMimeType(ContentService.MimeType.JSON)
-          .setHeaders({'Access-Control-Allow-Origin': '*'});
+          .setMimeType(ContentService.MimeType.JSON);
       }
       
       // Append phrase with initial rating of 0
@@ -48,8 +47,7 @@ function doPost(e) {
       
       return ContentService
         .createTextOutput(JSON.stringify({success: true}))
-        .setMimeType(ContentService.MimeType.JSON)
-        .setHeaders({'Access-Control-Allow-Origin': '*'});
+        .setMimeType(ContentService.MimeType.JSON);
         
     } else if (data.action === 'vote') {
       // Save vote to Votes sheet and update rating in Phrases sheet
@@ -124,38 +122,24 @@ function doPost(e) {
       
       return ContentService
         .createTextOutput(JSON.stringify({success: true}))
-        .setMimeType(ContentService.MimeType.JSON)
-        .setHeaders({'Access-Control-Allow-Origin': '*'});
+        .setMimeType(ContentService.MimeType.JSON);
     }
     
     return ContentService
       .createTextOutput(JSON.stringify({success: false, error: 'Ação não suportada'}))
-      .setMimeType(ContentService.MimeType.JSON)
-      .setHeaders({'Access-Control-Allow-Origin': '*'});
+      .setMimeType(ContentService.MimeType.JSON);
       
   } catch (error) {
     return ContentService
       .createTextOutput(JSON.stringify({success: false, error: error.toString()}))
-      .setMimeType(ContentService.MimeType.JSON)
-      .setHeaders({'Access-Control-Allow-Origin': '*'});
+      .setMimeType(ContentService.MimeType.JSON);
   }
 }
 
 function doGet(e) {
   return ContentService
     .createTextOutput(JSON.stringify({message: 'Google Apps Script está funcionando!'}))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeaders({'Access-Control-Allow-Origin': '*'});
-}
-
-function doOptions() {
-  return ContentService
-    .createTextOutput('')
-    .setHeaders({
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
-    });
+    .setMimeType(ContentService.MimeType.JSON);
 }
 ```
 
@@ -172,9 +156,11 @@ function doOptions() {
 3. Configure:
    - **Descrição**: "API para escrita na planilha"
    - **Executar como**: "Eu mesmo"
-   - **Quem tem acesso**: "Qualquer pessoa"
+   - **Quem tem acesso**: "Qualquer pessoa" (IMPORTANTE: Isso permite CORS automaticamente)
 4. Clique em "Implantar"
 5. **Copie a URL fornecida** - esta é sua URL do Web App
+
+**Nota sobre CORS:** Quando você configura "Quem tem acesso" como "Qualquer pessoa", o Google Apps Script automaticamente permite requisições cross-origin (CORS). Não é necessário adicionar headers manualmente.
 
 ## Passo 4: Configurar no Site
 
