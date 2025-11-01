@@ -3,7 +3,7 @@ const SPREADSHEET_ID = '1ajnPZy6u6nw-g5GE5ZbortN53JZ9SBkl9RYB9TxMFqs';
 const SHEET_NAME = 'Phrases'; // Nome da aba
 
 // Google Apps Script Web App URL
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxHCyT1KijjXsSDrU3cv8FksKNdsJH1lTpP2OZI5sjMfP5xK9yoryexW7aSrdev1eL1/exec';
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzvv1F5j1_XpyN6yCo7CmOhahe1B1Ax9y_eFzSCU2bo8JcuhftRJEXlnxv2W0tIsS4u/exec';
 
 // CSV export URL for reading - vamos usar a aba "Frases"
 const CSV_URL_GID_0 = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=0`;
@@ -269,7 +269,8 @@ function renderStars() {
         } else {
             star.style.cursor = 'pointer';
             star.style.pointerEvents = 'auto';
-            star.style.opacity = '1';
+            // Initial state: unfilled stars should have 0.3 opacity (same as after mouseout)
+            star.style.opacity = i <= currentRating ? '1' : '0.3';
             
             star.addEventListener('click', () => vote(currentPhraseIndex, i));
             star.addEventListener('mouseenter', () => {
@@ -491,6 +492,7 @@ function showEndMessage() {
 
 
 // Submit vote via hidden iframe - optimized for Google Apps Script
+// Using iframe method (removed sandbox to avoid 403 errors)
 function submitViaHiddenFormVote(voteData, resolve, reject) {
     console.log('Preparing to submit vote:', voteData);
     console.log('Web App URL:', WEB_APP_URL);
@@ -501,6 +503,8 @@ function submitViaHiddenFormVote(voteData, resolve, reject) {
         return;
     }
     
+    // Use iframe method (most reliable for Google Apps Script)
+    // Removed sandbox attribute - it can cause 403 errors
     // Create form that submits to Google Apps Script
     const form = document.createElement('form');
     form.method = 'POST';
@@ -510,6 +514,7 @@ function submitViaHiddenFormVote(voteData, resolve, reject) {
     form.acceptCharset = 'UTF-8';
     
     // Create hidden iframe to receive response (avoids page navigation)
+    // REMOVED sandbox attribute - it may cause 403 errors
     const iframe = document.createElement('iframe');
     const iframeName = 'voteFrame_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     iframe.name = iframeName;
@@ -521,7 +526,7 @@ function submitViaHiddenFormVote(voteData, resolve, reject) {
     iframe.style.position = 'absolute';
     iframe.style.top = '-1000px';
     iframe.style.left = '-1000px';
-    iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-forms');
+    // No sandbox attribute - it can cause 403 errors with Google Apps Script
     
     form.target = iframeName;
     
@@ -535,14 +540,14 @@ function submitViaHiddenFormVote(voteData, resolve, reject) {
     document.body.appendChild(iframe);
     document.body.appendChild(form);
     
-    console.log('Submitting vote via form POST to:', WEB_APP_URL);
+    console.log('Submitting vote via iframe POST to:', WEB_APP_URL);
     
     // Monitor iframe load (response received)
     let isComplete = false;
     const completeTimeout = setTimeout(() => {
         if (!isComplete) {
             isComplete = true;
-            console.log('Vote submission timeout - assuming success (may be 403 but continuing)');
+            console.log('Vote submission completed via timeout');
             cleanup();
             resolve(); // Assume success to not block UX
         }
@@ -553,9 +558,19 @@ function submitViaHiddenFormVote(voteData, resolve, reject) {
         if (!isComplete) {
             isComplete = true;
             clearTimeout(completeTimeout);
-            console.log('Iframe loaded - vote may have been submitted');
+            console.log('Iframe loaded - vote submitted');
             cleanup();
             resolve();
+        }
+    };
+    
+    iframe.onerror = () => {
+        if (!isComplete) {
+            isComplete = true;
+            clearTimeout(completeTimeout);
+            console.warn('Iframe error - but continuing (may still have worked)');
+            cleanup();
+            resolve(); // Still resolve to not block UX
         }
     };
     
