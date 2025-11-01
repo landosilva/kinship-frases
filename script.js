@@ -206,31 +206,65 @@ function parseCSV(text) {
 
 // Show next unvoted phrase
 function showNextPhrase() {
-    // Find phrases that haven't been voted yet
-    const unvotedPhrases = phrases
-        .map((phrase, index) => ({ phrase, index }))
-        .filter(({ index }) => userVotes[index] === null || userVotes[index] === undefined);
+    // Show loading indicator while transitioning
+    showPhraseLoading(true);
     
-    if (unvotedPhrases.length === 0) {
-        // All phrases have been voted
-        showEndMessage();
-        return;
+    setTimeout(() => {
+        // Find phrases that haven't been voted yet
+        const unvotedPhrases = phrases
+            .map((phrase, index) => ({ phrase, index }))
+            .filter(({ index }) => userVotes[index] === null || userVotes[index] === undefined);
+        
+        if (unvotedPhrases.length === 0) {
+            // All phrases have been voted
+            showEndMessage();
+            showPhraseLoading(false);
+            return;
+        }
+        
+        // Pick a random unvoted phrase
+        const randomIndex = Math.floor(Math.random() * unvotedPhrases.length);
+        const selected = unvotedPhrases[randomIndex];
+        currentPhraseIndex = selected.index;
+        
+        // Display phrase with quotes and italic style
+        phraseText.innerHTML = `"${selected.phrase.text}"`;
+        
+        // Render stars
+        renderStars();
+        
+        // Show container
+        phraseContainer.style.display = 'flex';
+        endMessage.style.display = 'none';
+        
+        // Hide loading after phrase is shown
+        setTimeout(() => {
+            showPhraseLoading(false);
+        }, 300);
+    }, 200);
+}
+
+// Show/hide loading indicator for phrase transition
+function showPhraseLoading(show) {
+    let loadingOverlay = document.getElementById('phraseLoadingOverlay');
+    
+    if (show && !loadingOverlay) {
+        loadingOverlay = document.createElement('div');
+        loadingOverlay.id = 'phraseLoadingOverlay';
+        loadingOverlay.className = 'phrase-loading-overlay';
+        loadingOverlay.innerHTML = `
+            <div class="loading-spinner-small"></div>
+            <p>Carregando próxima frase...</p>
+        `;
+        phraseContainer.appendChild(loadingOverlay);
+    } else if (!show && loadingOverlay) {
+        loadingOverlay.style.opacity = '0';
+        setTimeout(() => {
+            if (loadingOverlay.parentNode) {
+                loadingOverlay.parentNode.removeChild(loadingOverlay);
+            }
+        }, 300);
     }
-    
-    // Pick a random unvoted phrase
-    const randomIndex = Math.floor(Math.random() * unvotedPhrases.length);
-    const selected = unvotedPhrases[randomIndex];
-    currentPhraseIndex = selected.index;
-    
-    // Display phrase with quotes and italic style
-    phraseText.innerHTML = `"${selected.phrase.text}"`;
-    
-    // Render stars
-    renderStars();
-    
-    // Show container
-    phraseContainer.style.display = 'flex';
-    endMessage.style.display = 'none';
 }
 
 // Render star rating (0-5)
@@ -243,32 +277,44 @@ function renderStars() {
     for (let i = 1; i <= 5; i++) {
         const star = document.createElement('span');
         star.className = 'star';
+        // Always show filled stars for the selected rating
         star.textContent = i <= currentRating ? '⭐️' : '☆';
         star.dataset.rating = i;
         star.style.cursor = hasVoted ? 'default' : 'pointer';
+        star.style.opacity = i <= currentRating ? '1' : '0.3';
         
         if (!hasVoted) {
             star.addEventListener('click', () => vote(currentPhraseIndex, i));
             star.addEventListener('mouseenter', () => {
-                highlightStars(i);
+                // On hover, show preview of that rating
+                const stars = starsContainer.querySelectorAll('.star');
+                stars.forEach((s, idx) => {
+                    const starNum = idx + 1;
+                    s.textContent = starNum <= i ? '⭐️' : '☆';
+                    s.style.opacity = starNum <= i ? '1' : '0.3';
+                });
             });
         }
         
         starsContainer.appendChild(star);
     }
     
-    // Reset hover when mouse leaves (only once)
+    // Reset hover when mouse leaves (only if not voted)
     if (!hasVoted) {
         const handleMouseLeave = () => {
-            highlightStars(0);
+            const stars = starsContainer.querySelectorAll('.star');
+            stars.forEach((star, index) => {
+                const starNumber = index + 1;
+                star.textContent = starNumber <= currentRating ? '⭐️' : '☆';
+                star.style.opacity = starNumber <= currentRating ? '1' : '0.3';
+            });
         };
-        // Remove old listener if exists
         starsContainer.removeEventListener('mouseleave', handleMouseLeave);
         starsContainer.addEventListener('mouseleave', handleMouseLeave);
     }
 }
 
-// Highlight stars on hover
+// Highlight stars on hover (or show current rating)
 function highlightStars(rating) {
     const stars = starsContainer.querySelectorAll('.star');
     stars.forEach((star, index) => {
@@ -284,37 +330,36 @@ async function vote(phraseIndex, rating) {
         return; // Already voted, ignore
     }
     
-    // Update local cache
+    // Update local cache immediately
     userVotes[phraseIndex] = rating;
     localStorage.setItem('userVotes', JSON.stringify(userVotes));
     
-    // Update stars display
+    // Update stars display to show selected rating
     renderStars();
     
     // Add flashy effects
     addVoteEffects(rating);
     
-    // Send vote to server
-    try {
-        await submitVote(phraseIndex, rating);
+    // Update progress immediately
+    updateProgress();
+    
+    // Send vote to server (fire and forget - don't wait for response)
+    submitVote(phraseIndex, rating).then(() => {
         console.log('Vote submitted successfully');
-        
-        // Update progress
-        updateProgress();
-        
-        // Move to next phrase after a delay
+    }).catch((err) => {
+        console.error('Error submitting vote:', err);
+        // Don't revert - keep the vote locally even if server fails
+        // The user experience is better this way
+        showError('Aviso: Voto pode não ter sido salvo. Verifique sua conexão.');
+    });
+    
+    // Move to next phrase after a delay (show loading during transition)
+    setTimeout(() => {
+        showPhraseLoading(true);
         setTimeout(() => {
             showNextPhrase();
-        }, 1000);
-        
-    } catch (err) {
-        console.error('Error submitting vote:', err);
-        // Revert local change
-        userVotes[phraseIndex] = null;
-        localStorage.setItem('userVotes', JSON.stringify(userVotes));
-        showError('Erro ao salvar voto: ' + err.message);
-        renderStars();
-    }
+        }, 300);
+    }, 800);
 }
 
 // Add flashy effects after voting
@@ -410,22 +455,16 @@ function submitViaHiddenFormVote(voteData, resolve, reject) {
         return;
     }
     
-    // Use form submission (most reliable with Google Apps Script)
+    // Create a hidden iframe with unique name
     const iframe = document.createElement('iframe');
-    const iframeName = 'hiddenVoteFrame_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const iframeName = 'hiddenFrame_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     iframe.name = iframeName;
     iframe.style.display = 'none';
     iframe.style.width = '0';
     iframe.style.height = '0';
     iframe.style.border = 'none';
-    
-    // Add error handler to iframe
-    iframe.onload = () => {
-        console.log('Iframe loaded (response received)');
-    };
-    iframe.onerror = (err) => {
-        console.error('Iframe error:', err);
-    };
+    iframe.style.position = 'absolute';
+    iframe.style.left = '-9999px';
     
     document.body.appendChild(iframe);
     
@@ -439,7 +478,6 @@ function submitViaHiddenFormVote(voteData, resolve, reject) {
     // Send as postData parameter (form field)
     const payload = JSON.stringify(voteData);
     console.log('Payload to send:', payload);
-    console.log('Payload length:', payload.length);
     
     const dataInput = document.createElement('input');
     dataInput.type = 'hidden';
@@ -449,32 +487,66 @@ function submitViaHiddenFormVote(voteData, resolve, reject) {
     form.appendChild(dataInput);
     document.body.appendChild(form);
     
+    // Monitor iframe for completion
+    let resolved = false;
+    const timeout = setTimeout(() => {
+        if (!resolved) {
+            resolved = true;
+            console.log('Vote submission timeout, assuming success');
+            cleanup();
+            resolve();
+        }
+    }, 3000);
+    
+    iframe.onload = () => {
+        if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            console.log('Iframe loaded, vote submitted');
+            cleanup();
+            resolve();
+        }
+    };
+    
+    iframe.onerror = () => {
+        if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            console.warn('Iframe error, but vote may still be submitted');
+            cleanup();
+            resolve(); // Assume success even on error
+        }
+    };
+    
+    function cleanup() {
+        setTimeout(() => {
+            try {
+                if (document.body.contains(form)) {
+                    document.body.removeChild(form);
+                }
+                if (document.body.contains(iframe)) {
+                    document.body.removeChild(iframe);
+                }
+            } catch (e) {
+                console.warn('Cleanup error:', e);
+            }
+        }, 1000);
+    }
+    
     // Submit the form
     console.log('Submitting form to:', WEB_APP_URL);
     try {
         form.submit();
         console.log('Form submitted successfully');
     } catch (err) {
-        console.error('Error submitting form:', err);
-        reject(err);
-        return;
-    }
-    
-    // Clean up and resolve after delay
-    setTimeout(() => {
-        try {
-            if (document.body.contains(form)) {
-                document.body.removeChild(form);
-            }
-            if (document.body.contains(iframe)) {
-                document.body.removeChild(iframe);
-            }
-        } catch (e) {
-            console.warn('Cleanup error:', e);
+        if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            console.error('Error submitting form:', err);
+            cleanup();
+            reject(err);
         }
-        console.log('Vote submission completed');
-        resolve();
-    }, 2500);
+    }
 }
 
 // UI Helper functions

@@ -162,9 +162,20 @@ function doGet(e) {
 5. **Copie a URL fornecida** - esta é sua URL do Web App
 
 **⚠️ IMPORTANTE sobre Permissões:**
-- Se você receber erro 403, é porque "Quem tem acesso" está configurado incorretamente
-- Para sites externos (como GitHub Pages), você DEVE usar "Qualquer pessoa" / "Anyone"
-- Cada vez que você modificar o código do script, precisa fazer um NOVO deploy para atualizar
+- Se você receber erro 403, verifique:
+  1. **"Quem tem acesso"** deve ser **"Qualquer pessoa"** / **"Anyone"** (não "Only myself")
+  2. **"Executar como"** deve ser **"Eu mesmo"** / **"Me"**
+  3. Após alterar permissões, você DEVE fazer um **NOVO DEPLOY** (criar nova versão)
+  4. Quando criar nova versão, copie a **NOVA URL** que será gerada
+  5. Atualize a URL no arquivo `script.js`
+  
+**Sobre o erro 403:**
+- O Google Apps Script pode bloquear requisições POST de origens externas mesmo com "Anyone"
+- Se continuar recebendo 403, tente:
+  1. Desabilitar bloqueadores de pop-up no navegador
+  2. Testar em modo anônimo/privado
+  3. Verificar se há extensões do navegador bloqueando requisições
+  4. Testar diretamente a URL do script em uma nova aba (deve retornar JSON)
 
 **Nota sobre CORS:** Quando você configura "Quem tem acesso" como "Qualquer pessoa", o Google Apps Script automaticamente permite requisições cross-origin (CORS). Não é necessário adicionar headers manualmente.
 
