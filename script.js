@@ -491,8 +491,8 @@ function showEndMessage() {
 }
 
 
-// Submit vote via popup window - avoids 403 errors from iframe restrictions
-// This method opens a hidden popup, submits the form, and closes it immediately
+// Submit vote using XMLHttpRequest (no popup, no visible iframe)
+// This method sends POST data directly without opening windows
 function submitViaHiddenFormVote(voteData, resolve, reject) {
     console.log('Preparing to submit vote:', voteData);
     console.log('Web App URL:', WEB_APP_URL);
@@ -503,87 +503,52 @@ function submitViaHiddenFormVote(voteData, resolve, reject) {
         return;
     }
     
-    // Create a unique window name to avoid conflicts
-    const windowName = 'voteWindow_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    
-    // Create form that submits to Google Apps Script
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = WEB_APP_URL;
-    form.target = windowName; // Submit to popup window
-    form.style.display = 'none';
-    form.enctype = 'application/x-www-form-urlencoded';
-    form.acceptCharset = 'UTF-8';
-    
     const payload = JSON.stringify(voteData);
-    const dataInput = document.createElement('input');
-    dataInput.type = 'hidden';
-    dataInput.name = 'postData';
-    dataInput.value = payload;
+    console.log('Sending vote data:', payload);
+    console.log('Vote data length:', payload.length);
     
-    form.appendChild(dataInput);
-    document.body.appendChild(form);
+    // Try XMLHttpRequest first (most reliable, no visible elements)
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', WEB_APP_URL, true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     
-    console.log('Submitting vote via popup window POST to:', WEB_APP_URL);
-    
-    // Open a tiny hidden popup window
-    // Use dimensions that make it nearly invisible
-    const popup = window.open('', windowName, 'width=1,height=1,left=-1000,top=-1000,status=no,toolbar=no,menubar=no,location=no');
-    
-    if (!popup) {
-        console.warn('Popup blocked, trying iframe fallback');
-        // Fallback to iframe if popup is blocked
-        submitViaIframeFallback(voteData, resolve, reject);
-        document.body.removeChild(form);
-        return;
-    }
-    
-    // Submit form to popup
-    try {
-        form.submit();
-        console.log('Form submitted to popup window');
-        
-        // Close popup after a short delay (allowing form submission to complete)
-        setTimeout(() => {
-            try {
-                if (popup && !popup.closed) {
-                    popup.close();
-                }
-            } catch (e) {
-                console.warn('Error closing popup:', e);
-            }
-            
-            // Cleanup form
-            try {
-                if (form.parentNode) {
-                    document.body.removeChild(form);
-                }
-            } catch (e) {
-                console.warn('Cleanup error:', e);
-            }
-            
-            console.log('Vote submitted successfully via popup');
+    xhr.onload = function() {
+        if (xhr.status === 200 || xhr.status === 0) {
+            console.log('Vote submitted successfully via XMLHttpRequest');
             resolve();
-        }, 1000);
-        
-    } catch (err) {
-        console.error('Error submitting form:', err);
-        try {
-            if (popup && !popup.closed) {
-                popup.close();
-            }
-            if (form.parentNode) {
-                document.body.removeChild(form);
-            }
-        } catch (e) {
-            // Ignore cleanup errors
+        } else {
+            console.warn('XMLHttpRequest returned status:', xhr.status, '- trying iframe fallback');
+            submitViaIframe(voteData, resolve, reject);
         }
-        reject(err);
+    };
+    
+    xhr.onerror = function() {
+        console.warn('XMLHttpRequest error - trying iframe fallback');
+        submitViaIframe(voteData, resolve, reject);
+    };
+    
+    xhr.ontimeout = function() {
+        console.warn('XMLHttpRequest timeout - trying iframe fallback');
+        xhr.abort();
+        submitViaIframe(voteData, resolve, reject);
+    };
+    
+    xhr.timeout = 5000; // 5 second timeout
+    
+    // Send as form-urlencoded data
+    const formBody = 'postData=' + encodeURIComponent(payload);
+    
+    try {
+        console.log('Submitting vote via XMLHttpRequest POST to:', WEB_APP_URL);
+        xhr.send(formBody);
+    } catch (err) {
+        console.warn('XMLHttpRequest send failed:', err, '- trying iframe fallback');
+        submitViaIframe(voteData, resolve, reject);
     }
 }
 
-// Fallback: Submit via hidden iframe (for when popup is blocked)
-function submitViaIframeFallback(voteData, resolve, reject) {
+// Fallback: Submit via hidden iframe (completely invisible)
+function submitViaIframe(voteData, resolve, reject) {
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = WEB_APP_URL;
@@ -591,16 +556,19 @@ function submitViaIframeFallback(voteData, resolve, reject) {
     form.enctype = 'application/x-www-form-urlencoded';
     form.acceptCharset = 'UTF-8';
     
+    // Create completely hidden iframe
     const iframe = document.createElement('iframe');
     const iframeName = 'voteFrame_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     iframe.name = iframeName;
     iframe.style.display = 'none';
-    iframe.style.width = '1px';
-    iframe.style.height = '1px';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
     iframe.style.border = 'none';
     iframe.style.position = 'absolute';
-    iframe.style.top = '-1000px';
-    iframe.style.left = '-1000px';
+    iframe.style.top = '-9999px';
+    iframe.style.left = '-9999px';
+    iframe.style.opacity = '0';
+    iframe.style.visibility = 'hidden';
     
     form.target = iframeName;
     
@@ -614,52 +582,68 @@ function submitViaIframeFallback(voteData, resolve, reject) {
     document.body.appendChild(iframe);
     document.body.appendChild(form);
     
-    console.log('Submitting vote via iframe fallback to:', WEB_APP_URL);
+    console.log('Submitting vote via hidden iframe POST to:', WEB_APP_URL);
     
-    let isComplete = false;
-    const completeTimeout = setTimeout(() => {
-        if (!isComplete) {
-            isComplete = true;
-            cleanup();
-            resolve();
-        }
-    }, 2000);
-    
-    iframe.onload = () => {
-        if (!isComplete) {
-            isComplete = true;
-            clearTimeout(completeTimeout);
-            cleanup();
-            resolve();
-        }
-    };
-    
-    function cleanup() {
-        setTimeout(() => {
-            try {
-                if (form.parentNode) {
-                    document.body.removeChild(form);
-                }
-                if (iframe.parentNode) {
-                    document.body.removeChild(iframe);
-                }
-            } catch (e) {
-                console.warn('Cleanup error:', e);
+    // Wait a tiny bit for iframe to be ready, then submit
+    setTimeout(() => {
+        let isComplete = false;
+        const completeTimeout = setTimeout(() => {
+            if (!isComplete) {
+                isComplete = true;
+                console.log('Vote submission completed (timeout)');
+                cleanup();
+                resolve();
             }
-        }, 500);
-    }
-    
-    try {
-        form.submit();
-        console.log('Form submitted via iframe fallback');
-    } catch (err) {
-        if (!isComplete) {
-            isComplete = true;
-            clearTimeout(completeTimeout);
-            cleanup();
-            reject(err);
+        }, 3000);
+        
+        iframe.onload = () => {
+            if (!isComplete) {
+                isComplete = true;
+                clearTimeout(completeTimeout);
+                console.log('Vote submitted successfully via iframe');
+                cleanup();
+                resolve();
+            }
+        };
+        
+        iframe.onerror = () => {
+            if (!isComplete) {
+                isComplete = true;
+                clearTimeout(completeTimeout);
+                console.warn('Iframe error, but vote may have been submitted');
+                cleanup();
+                resolve(); // Assume success to not block UX
+            }
+        };
+        
+        function cleanup() {
+            setTimeout(() => {
+                try {
+                    if (form.parentNode) {
+                        document.body.removeChild(form);
+                    }
+                    if (iframe.parentNode) {
+                        document.body.removeChild(iframe);
+                    }
+                } catch (e) {
+                    console.warn('Cleanup error:', e);
+                }
+            }, 1000);
         }
-    }
+        
+        try {
+            form.submit();
+            console.log('Form submitted via iframe');
+        } catch (err) {
+            if (!isComplete) {
+                isComplete = true;
+                clearTimeout(completeTimeout);
+                console.error('Error submitting form:', err);
+                cleanup();
+                reject(err);
+            }
+        }
+    }, 100); // Small delay to ensure iframe is ready
 }
 
 // UI Helper functions

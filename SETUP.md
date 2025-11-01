@@ -13,13 +13,16 @@ function doPost(e) {
   try {
     let data;
     
-    // Try to parse from postData.contents (JSON body)
-    if (e.postData && e.postData.contents) {
-      data = JSON.parse(e.postData.contents);
-    }
-    // Try to parse from parameter (form data)
-    else if (e.parameter && e.parameter.postData) {
+    // Log what we receive for debugging
+    Logger.log('Received POST: ' + JSON.stringify(e));
+    
+    // Try to parse from parameter (form data - most common)
+    if (e.parameter && e.parameter.postData) {
       data = JSON.parse(e.parameter.postData);
+    }
+    // Try to parse from postData.contents (JSON body)
+    else if (e.postData && e.postData.contents) {
+      data = JSON.parse(e.postData.contents);
     }
     // Fallback: try to get from raw postData
     else if (e.postData) {
@@ -27,6 +30,8 @@ function doPost(e) {
     } else {
       throw new Error('Nenhum dado recebido');
     }
+    
+    Logger.log('Parsed data: ' + JSON.stringify(data));
     
     const sheetId = '1ajnPZy6u6nw-g5GE5ZbortN53JZ9SBkl9RYB9TxMFqs';
     
@@ -141,9 +146,45 @@ function doPost(e) {
 }
 
 function doGet(e) {
-  return ContentService
-    .createTextOutput(JSON.stringify({message: 'Google Apps Script está funcionando!'}))
-    .setMimeType(ContentService.MimeType.JSON);
+  try {
+    // Check if requesting votes data
+    if (e.parameter && e.parameter.action === 'getVotes') {
+      const sheetId = '1ajnPZy6u6nw-g5GE5ZbortN53JZ9SBkl9RYB9TxMFqs';
+      const ss = SpreadsheetApp.openById(sheetId);
+      const votesSheet = ss.getSheetByName('Votes');
+      
+      if (!votesSheet) {
+        return ContentService
+          .createTextOutput(JSON.stringify({success: false, error: 'Votes sheet not found', data: []}))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      // Get all votes data
+      const votesData = votesSheet.getDataRange().getValues();
+      const result = [];
+      
+      // Skip header row
+      for (let i = 1; i < votesData.length; i++) {
+        result.push({
+          userId: votesData[i][0],
+          votes: votesData[i][1] || ''
+        });
+      }
+      
+      return ContentService
+        .createTextOutput(JSON.stringify({success: true, data: result}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Default response
+    return ContentService
+      .createTextOutput(JSON.stringify({message: 'Google Apps Script está funcionando!'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService
+      .createTextOutput(JSON.stringify({success: false, error: error.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }
 ```
 
