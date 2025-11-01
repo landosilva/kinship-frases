@@ -3,7 +3,7 @@ const SPREADSHEET_ID = '1ajnPZy6u6nw-g5GE5ZbortN53JZ9SBkl9RYB9TxMFqs';
 const SHEET_NAME = 'Phrases'; // Nome da aba
 
 // Google Apps Script Web App URL
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyvTOavkRUQaoVaRd9WKm01PPmeOhwQL9qKP4mdc0Vc-uCjyxgLNzC9bpW9yhWT7R1g/exec';
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxHCyT1KijjXsSDrU3cv8FksKNdsJH1lTpP2OZI5sjMfP5xK9yoryexW7aSrdev1eL1/exec';
 
 // CSV export URL for reading - vamos usar a aba "Frases"
 const CSV_URL_GID_0 = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=0`;
@@ -402,6 +402,13 @@ function showEndMessage() {
 // Submit vote via hidden iframe
 function submitViaHiddenFormVote(voteData, resolve, reject) {
     console.log('Preparing to submit vote:', voteData);
+    console.log('Web App URL:', WEB_APP_URL);
+    
+    // Check if URL is configured
+    if (!WEB_APP_URL || WEB_APP_URL.includes('YOUR_GOOGLE_APPS_SCRIPT_URL')) {
+        reject(new Error('Web App URL não configurada. Configure no script.js'));
+        return;
+    }
     
     // Use form submission (most reliable with Google Apps Script)
     const iframe = document.createElement('iframe');
@@ -411,6 +418,15 @@ function submitViaHiddenFormVote(voteData, resolve, reject) {
     iframe.style.width = '0';
     iframe.style.height = '0';
     iframe.style.border = 'none';
+    
+    // Add error handler to iframe
+    iframe.onload = () => {
+        console.log('Iframe loaded (response received)');
+    };
+    iframe.onerror = (err) => {
+        console.error('Iframe error:', err);
+    };
+    
     document.body.appendChild(iframe);
     
     const form = document.createElement('form');
@@ -423,6 +439,7 @@ function submitViaHiddenFormVote(voteData, resolve, reject) {
     // Send as postData parameter (form field)
     const payload = JSON.stringify(voteData);
     console.log('Payload to send:', payload);
+    console.log('Payload length:', payload.length);
     
     const dataInput = document.createElement('input');
     dataInput.type = 'hidden';
@@ -434,7 +451,14 @@ function submitViaHiddenFormVote(voteData, resolve, reject) {
     
     // Submit the form
     console.log('Submitting form to:', WEB_APP_URL);
-    form.submit();
+    try {
+        form.submit();
+        console.log('Form submitted successfully');
+    } catch (err) {
+        console.error('Error submitting form:', err);
+        reject(err);
+        return;
+    }
     
     // Clean up and resolve after delay
     setTimeout(() => {

@@ -155,10 +155,16 @@ function doGet(e) {
 2. Selecione o tipo: "Aplicativo da Web"
 3. Configure:
    - **Descrição**: "API para escrita na planilha"
-   - **Executar como**: "Eu mesmo"
-   - **Quem tem acesso**: "Qualquer pessoa" (IMPORTANTE: Isso permite CORS automaticamente)
+   - **Executar como**: "Eu mesmo" (ou "Me" em inglês)
+   - **Quem tem acesso**: **"Qualquer pessoa"** ou **"Anyone"** (CRÍTICO: Deve ser exatamente isso para evitar erro 403)
+   - ⚠️ NÃO use "Apenas eu mesmo" ou "Only myself" - isso causará erro 403
 4. Clique em "Implantar"
 5. **Copie a URL fornecida** - esta é sua URL do Web App
+
+**⚠️ IMPORTANTE sobre Permissões:**
+- Se você receber erro 403, é porque "Quem tem acesso" está configurado incorretamente
+- Para sites externos (como GitHub Pages), você DEVE usar "Qualquer pessoa" / "Anyone"
+- Cada vez que você modificar o código do script, precisa fazer um NOVO deploy para atualizar
 
 **Nota sobre CORS:** Quando você configura "Quem tem acesso" como "Qualquer pessoa", o Google Apps Script automaticamente permite requisições cross-origin (CORS). Não é necessário adicionar headers manualmente.
 
