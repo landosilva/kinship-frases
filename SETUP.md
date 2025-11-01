@@ -52,6 +52,7 @@ function doPost(e) {
     } else if (data.action === 'vote') {
       // Save vote to Votes sheet and update rating in Phrases sheet
       // Rating is now 0-5 (stars) instead of -1, 0, 1
+      // The client sends ALL votes for the user in data.votes (comma-separated string)
       
       // Get or create Votes sheet
       let votesSheet = ss.getSheetByName('Votes');
@@ -62,9 +63,9 @@ function doPost(e) {
       
       // Check if user already exists
       const userId = data.userId;
-      const rating = data.rating || 0; // 0-5 stars
+      const rating = data.rating || 0; // 0-5 stars (current vote)
       const phraseIndex = data.phraseIndex;
-      const votesString = data.votes || '';
+      const allVotesString = data.votes || ''; // ALL votes as comma-separated string
       
       // Find existing row for this user
       const votesData = votesSheet.getDataRange().getValues();
@@ -77,7 +78,10 @@ function doPost(e) {
         }
       }
       
-      // Update or create user vote record
+      // Use the votes string sent by the client (contains ALL votes)
+      const votesString = allVotesString;
+      
+      // Update or create user vote record with ALL votes
       if (userRowIndex > 0) {
         // Update existing
         votesSheet.getRange(userRowIndex, 2).setValue(votesString);

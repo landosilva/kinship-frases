@@ -204,44 +204,24 @@ function parseCSV(text) {
     return rows;
 }
 
-// Show next unvoted phrase
+// Show next unvoted phrase (used on initial load)
 function showNextPhrase() {
-    // Show loading indicator while transitioning
-    showPhraseLoading(true);
+    // Find phrases that haven't been voted yet
+    const unvotedPhrases = phrases
+        .map((phrase, index) => ({ phrase, index }))
+        .filter(({ index }) => userVotes[index] === null || userVotes[index] === undefined);
     
-    setTimeout(() => {
-        // Find phrases that haven't been voted yet
-        const unvotedPhrases = phrases
-            .map((phrase, index) => ({ phrase, index }))
-            .filter(({ index }) => userVotes[index] === null || userVotes[index] === undefined);
-        
-        if (unvotedPhrases.length === 0) {
-            // All phrases have been voted
-            showEndMessage();
-            showPhraseLoading(false);
-            return;
-        }
-        
-        // Pick a random unvoted phrase
-        const randomIndex = Math.floor(Math.random() * unvotedPhrases.length);
-        const selected = unvotedPhrases[randomIndex];
-        currentPhraseIndex = selected.index;
-        
-        // Display phrase with quotes and italic style
-        phraseText.innerHTML = `"${selected.phrase.text}"`;
-        
-        // Render stars
-        renderStars();
-        
-        // Show container
-        phraseContainer.style.display = 'flex';
-        endMessage.style.display = 'none';
-        
-        // Hide loading after phrase is shown
-        setTimeout(() => {
-            showPhraseLoading(false);
-        }, 300);
-    }, 200);
+    if (unvotedPhrases.length === 0) {
+        // All phrases have been voted
+        showEndMessage();
+        return;
+    }
+    
+    // Pick a random unvoted phrase
+    const randomIndex = Math.floor(Math.random() * unvotedPhrases.length);
+    const selected = unvotedPhrases[randomIndex];
+    
+    displayPhrase(selected);
 }
 
 // Show/hide loading indicator for phrase transition
@@ -280,10 +260,17 @@ function renderStars() {
         // Always show filled stars for the selected rating
         star.textContent = i <= currentRating ? '⭐️' : '☆';
         star.dataset.rating = i;
-        star.style.cursor = hasVoted ? 'default' : 'pointer';
-        star.style.opacity = i <= currentRating ? '1' : '0.3';
         
-        if (!hasVoted) {
+        // If voted, disable interactions; otherwise enable
+        if (hasVoted) {
+            star.style.cursor = 'default';
+            star.style.pointerEvents = 'none';
+            star.style.opacity = i <= currentRating ? '1' : '0.3';
+        } else {
+            star.style.cursor = 'pointer';
+            star.style.pointerEvents = 'auto';
+            star.style.opacity = '1';
+            
             star.addEventListener('click', () => vote(currentPhraseIndex, i));
             star.addEventListener('mouseenter', () => {
                 // On hover, show preview of that rating
@@ -330,12 +317,18 @@ async function vote(phraseIndex, rating) {
         return; // Already voted, ignore
     }
     
+    // Disable all interactions immediately
+    disableInteractions(true);
+    
     // Update local cache immediately
     userVotes[phraseIndex] = rating;
     localStorage.setItem('userVotes', JSON.stringify(userVotes));
     
-    // Update stars display to show selected rating
+    // Update stars display to show selected rating (keep them filled and disable)
     renderStars();
+    
+    // Start loading next phrase in background IMMEDIATELY
+    const nextPhrasePromise = prepareNextPhrase();
     
     // Add flashy effects
     addVoteEffects(rating);
@@ -348,18 +341,69 @@ async function vote(phraseIndex, rating) {
         console.log('Vote submitted successfully');
     }).catch((err) => {
         console.error('Error submitting vote:', err);
-        // Don't revert - keep the vote locally even if server fails
-        // The user experience is better this way
         showError('Aviso: Voto pode não ter sido salvo. Verifique sua conexão.');
     });
     
-    // Move to next phrase after a delay (show loading during transition)
-    setTimeout(() => {
+    // Wait for animation to complete, then show next phrase
+    setTimeout(async () => {
         showPhraseLoading(true);
+        
+        // Wait for next phrase to be ready
+        const nextPhrase = await nextPhrasePromise;
+        
         setTimeout(() => {
-            showNextPhrase();
+            // Show the prepared phrase
+            displayPhrase(nextPhrase);
+            showPhraseLoading(false);
+            disableInteractions(false);
         }, 300);
-    }, 800);
+    }, 1000); // Wait for animation
+}
+
+// Disable/enable user interactions
+function disableInteractions(disable) {
+    const stars = starsContainer.querySelectorAll('.star');
+    stars.forEach(star => {
+        star.style.pointerEvents = disable ? 'none' : 'auto';
+        star.style.cursor = disable ? 'default' : 'pointer';
+    });
+    
+    phraseContainer.style.pointerEvents = disable ? 'none' : 'auto';
+}
+
+// Prepare next phrase in background (returns promise)
+async function prepareNextPhrase() {
+    return new Promise((resolve) => {
+        // Find phrases that haven't been voted yet
+        const unvotedPhrases = phrases
+            .map((phrase, index) => ({ phrase, index }))
+            .filter(({ index }) => userVotes[index] === null || userVotes[index] === undefined);
+        
+        if (unvotedPhrases.length === 0) {
+            resolve(null); // No more phrases
+            return;
+        }
+        
+        // Pick a random unvoted phrase
+        const randomIndex = Math.floor(Math.random() * unvotedPhrases.length);
+        const selected = unvotedPhrases[randomIndex];
+        
+        resolve(selected);
+    });
+}
+
+// Display a prepared phrase
+function displayPhrase(selected) {
+    if (!selected) {
+        showEndMessage();
+        return;
+    }
+    
+    currentPhraseIndex = selected.index;
+    phraseText.innerHTML = `"${selected.phrase.text}"`;
+    renderStars();
+    phraseContainer.style.display = 'flex';
+    endMessage.style.display = 'none';
 }
 
 // Add flashy effects after voting
@@ -398,23 +442,25 @@ function addVoteEffects(rating) {
 // Submit vote to server (rating 0-5)
 async function submitVote(phraseIndex, rating) {
     return new Promise((resolve, reject) => {
-        // Create vote data - ensure userVotes array is properly updated
-        const updatedVotes = [...userVotes];
+        // Always send ALL votes for this user
         // Make sure the array has the right length
-        while (updatedVotes.length < phrases.length) {
-            updatedVotes.push(null);
+        const allVotes = [...userVotes];
+        while (allVotes.length < phrases.length) {
+            allVotes.push(null);
         }
-        updatedVotes[phraseIndex] = rating;
+        // Update the current vote in the array
+        allVotes[phraseIndex] = rating;
         
         const voteData = {
             action: 'vote',
             userId: userId,
             phraseIndex: phraseIndex,
-            rating: rating, // 0-5 stars
-            votes: updatedVotes.map(v => v === null || v === undefined ? '' : v.toString()).join(',')
+            rating: rating, // 0-5 stars - the current vote
+            votes: allVotes.map(v => v === null || v === undefined ? '' : v.toString()).join(',') // ALL votes as comma-separated string
         };
         
         console.log('Submitting vote:', voteData);
+        console.log('All votes being sent:', voteData.votes);
         
         submitViaHiddenFormVote(voteData, resolve, reject);
     });
@@ -444,7 +490,7 @@ function showEndMessage() {
 }
 
 
-// Submit vote via hidden iframe
+// Submit vote via hidden iframe - optimized for Google Apps Script
 function submitViaHiddenFormVote(voteData, resolve, reject) {
     console.log('Preparing to submit vote:', voteData);
     console.log('Web App URL:', WEB_APP_URL);
@@ -455,93 +501,87 @@ function submitViaHiddenFormVote(voteData, resolve, reject) {
         return;
     }
     
-    // Create a hidden iframe with unique name
-    const iframe = document.createElement('iframe');
-    const iframeName = 'hiddenFrame_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    iframe.name = iframeName;
-    iframe.style.display = 'none';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = 'none';
-    iframe.style.position = 'absolute';
-    iframe.style.left = '-9999px';
-    
-    document.body.appendChild(iframe);
-    
+    // Create form that submits to Google Apps Script
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = WEB_APP_URL;
-    form.target = iframeName;
     form.style.display = 'none';
     form.enctype = 'application/x-www-form-urlencoded';
+    form.acceptCharset = 'UTF-8';
     
-    // Send as postData parameter (form field)
+    // Create hidden iframe to receive response (avoids page navigation)
+    const iframe = document.createElement('iframe');
+    const iframeName = 'voteFrame_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    iframe.name = iframeName;
+    iframe.id = iframeName;
+    iframe.style.display = 'none';
+    iframe.style.width = '1px';
+    iframe.style.height = '1px';
+    iframe.style.border = 'none';
+    iframe.style.position = 'absolute';
+    iframe.style.top = '-1000px';
+    iframe.style.left = '-1000px';
+    iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-forms');
+    
+    form.target = iframeName;
+    
     const payload = JSON.stringify(voteData);
-    console.log('Payload to send:', payload);
-    
     const dataInput = document.createElement('input');
     dataInput.type = 'hidden';
     dataInput.name = 'postData';
     dataInput.value = payload;
     
     form.appendChild(dataInput);
+    document.body.appendChild(iframe);
     document.body.appendChild(form);
     
-    // Monitor iframe for completion
-    let resolved = false;
-    const timeout = setTimeout(() => {
-        if (!resolved) {
-            resolved = true;
-            console.log('Vote submission timeout, assuming success');
-            cleanup();
-            resolve();
-        }
-    }, 3000);
+    console.log('Submitting vote via form POST to:', WEB_APP_URL);
     
+    // Monitor iframe load (response received)
+    let isComplete = false;
+    const completeTimeout = setTimeout(() => {
+        if (!isComplete) {
+            isComplete = true;
+            console.log('Vote submission timeout - assuming success (may be 403 but continuing)');
+            cleanup();
+            resolve(); // Assume success to not block UX
+        }
+    }, 2000);
+    
+    // Try to detect when iframe loads
     iframe.onload = () => {
-        if (!resolved) {
-            resolved = true;
-            clearTimeout(timeout);
-            console.log('Iframe loaded, vote submitted');
+        if (!isComplete) {
+            isComplete = true;
+            clearTimeout(completeTimeout);
+            console.log('Iframe loaded - vote may have been submitted');
             cleanup();
             resolve();
-        }
-    };
-    
-    iframe.onerror = () => {
-        if (!resolved) {
-            resolved = true;
-            clearTimeout(timeout);
-            console.warn('Iframe error, but vote may still be submitted');
-            cleanup();
-            resolve(); // Assume success even on error
         }
     };
     
     function cleanup() {
         setTimeout(() => {
             try {
-                if (document.body.contains(form)) {
-                    document.body.removeChild(form);
+                if (form.parentNode) {
+                    form.parentNode.removeChild(form);
                 }
-                if (document.body.contains(iframe)) {
-                    document.body.removeChild(iframe);
+                if (iframe.parentNode) {
+                    iframe.parentNode.removeChild(iframe);
                 }
             } catch (e) {
                 console.warn('Cleanup error:', e);
             }
-        }, 1000);
+        }, 500);
     }
     
     // Submit the form
-    console.log('Submitting form to:', WEB_APP_URL);
     try {
         form.submit();
         console.log('Form submitted successfully');
     } catch (err) {
-        if (!resolved) {
-            resolved = true;
-            clearTimeout(timeout);
+        if (!isComplete) {
+            isComplete = true;
+            clearTimeout(completeTimeout);
             console.error('Error submitting form:', err);
             cleanup();
             reject(err);
